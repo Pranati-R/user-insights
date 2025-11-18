@@ -24,7 +24,7 @@ def compute_metrics(events: list[dict]) -> SessionMetrics:
             or event.get("action")
         )
         for event in events
-        if event.get("metadata", {}).get("action") or event.get("action")
+        if (event.get("metadata") or {}).get("action") or event.get("action")
     )
 
     inter_event = []

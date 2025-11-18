@@ -18,6 +18,8 @@ from app.services.sessionizer import rebuild_sessions_for_user
 
 settings = get_settings()
 
+def is_nan(v):
+    return isinstance(v, float) and str(v) == "nan"
 
 class AnalyticsService:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -117,18 +119,44 @@ class AnalyticsService:
         contents = await file.read()
         if not contents:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-
+        print("contents")
         events = self._parse_file(contents, file.filename or "")
         inserted = 0
+       
         for raw_event in events:
+          
+            raw_type = raw_event.get("event_type")
+            if is_nan(raw_type) or raw_type in (None, ""):
+                raw_type = raw_event.get("type")
+            if raw_type:
+                raw_type = str(raw_type).strip().lower()
+            else:
+                raw_type = None
+
+            # If still missing, infer automatically
+            if raw_type is None:
+                if raw_event.get("scroll_depth") not in (None, float("nan")):
+                    raw_type = "scroll"
+                elif raw_event.get("action"):
+                    raw_type = "action"
+                elif raw_event.get("page"):
+                    raw_type = "page_view"
+                else:
+                    raw_type = "action"
+            raw_metadata = raw_event.get("metadata")
+            if raw_metadata is None or isinstance(raw_metadata, float):
+                raw_metadata = {}
+                    
             payload = EventPayload(
                 session_id=raw_event.get("session_id"),
-                event_type=raw_event.get("event_type"),
+                event_type=raw_type,
                 page=raw_event.get("page"),
-                metadata=raw_event.get("metadata"),
+                metadata=raw_metadata,
                 scroll_depth=raw_event.get("scroll_depth"),
+                website=raw_event.get("website"),
                 timestamp=self._parse_timestamp(raw_event.get("timestamp")),
             )
+            print(payload)
             await self.record_event(EventIn(user_id=user_id, **payload.model_dump()))
             inserted += 1
 

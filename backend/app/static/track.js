@@ -1,4 +1,24 @@
 ;(function () {
+  function getISTISOString() {
+    const now = new Date();
+    const options = {
+      timeZone: "Asia/Kolkata",
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    };
+  
+    const parts = new Intl.DateTimeFormat("en-CA", options).formatToParts(now);
+  
+    const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  
+    return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}+05:30`;
+  }
+  
   try {
     const current = document.currentScript
     if (!current) {
@@ -52,13 +72,14 @@
     }
 
     const sendEvent = (eventType, metadata) => {
+      console.log(getISTISOString())
       const mergedMeta = Object.assign({}, defaultMetadata(), metadata || {})
       const payload = {
         session_id: sessionId,
         event_type: eventType,
         page: window.location.pathname,
         website: window.location.origin,
-        timestamp: new Date().toISOString(),
+        timestamp: getISTISOString(),
         metadata: mergedMeta,
       }
 

@@ -21,6 +21,20 @@ class EventPayload(BaseModel):
     website: str | None = Field(default=None, max_length=512)
     timestamp: datetime
 
+    @model_validator(mode="before")
+    def sanitize_nan(cls, values: dict[str, Any]):
+        # Convert NaN → None
+        for key, val in values.items():
+            if isinstance(val, float) and str(val) == "nan":
+                values[key] = None
+        return values
+    @model_validator(mode="after")
+    def normalize_metadata(self):
+        if self.metadata is None:
+            self.metadata = {}
+        return self    
+
+
 
 class EventIn(EventPayload):
     user_id: str

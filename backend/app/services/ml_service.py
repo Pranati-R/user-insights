@@ -8,64 +8,94 @@ from huggingface_hub import snapshot_download
 from loguru import logger
 from skops.io import load as skops_load
 import joblib
-from sklearn.ensemble import IsolationForest
+
+from pyod.models.iforest import IForest
 
 from app.core.config import get_settings
 from app.schemas.analytics import SessionMetrics
 
 settings = get_settings()
 
-_model: IsolationForest | None = None
+_model: IForest | None = None
+
+LOCAL_MODEL_PATH = Path("app/models/local_iforest.pkl")   # <-- LOCAL MODEL
 
 
-def load_model() -> IsolationForest:
+def load_local_model() -> IForest | None:
+    """Try loading the locally saved PyOD model."""
+    print(LOCAL_MODEL_PATH)
+    print(LOCAL_MODEL_PATH.exists())
+    if LOCAL_MODEL_PATH.exists():
+        try:
+            logger.info("Loading local fallback model from {}", LOCAL_MODEL_PATH)
+            return joblib.load(LOCAL_MODEL_PATH)
+        except Exception as e:
+            logger.error("Failed to load local model: {}", e)
+    return None
+
+
+def load_model() -> IForest:
     """
-    Loads HuggingFace IsolationForest model.
-    Automatically supports both .skops and .pkl formats.
-    Falls back to a default dummy IsolationForest if loading fails.
+    Loads model from HuggingFace.
+    If HF fails, loads local model.
+    If that fails, loads emergency fallback model.
     """
     global _model
     if _model is not None:
         return _model
 
-    try:
-        logger.info("Downloading anomaly model from {}", settings.hf_model_repo)
-        repo_path = snapshot_download(
-            repo_id=settings.hf_model_repo,
-            token=settings.hf_token or None,
-            allow_patterns=[settings.hf_model_filename],
-        )
-        model_path = Path(repo_path) / settings.hf_model_filename
+    # # -------------------------------
+    # # TRY 1: Load from HuggingFace
+    # # -------------------------------
+    # try:
+    #     logger.info("Downloading anomaly model from {}", settings.hf_model_repo)
+    #     repo_path = snapshot_download(
+    #         repo_id=settings.hf_model_repo,
+    #         token=settings.hf_token or None,
+    #         allow_patterns=[settings.hf_model_filename],
+    #     )
+    #     model_path = Path(repo_path) / settings.hf_model_filename
 
-        logger.info("Found model at {}", model_path)
+    #     ext = model_path.suffix.lower()
 
-        # Load based on file extension
-        ext = model_path.suffix.lower()
+    #     if ext == ".skops":
+    #         _model = skops_load(model_path, trusted=True)
+    #     else:
+    #         _model = joblib.load(model_path)
 
-        if ext == ".skops":
-            logger.info("Loading model as .skops file")
-            _model = skops_load(model_path, trusted=True)
-        elif ext in [".pkl", ".pickle"]:
-            logger.info("Loading model as .pkl file")
-            _model = joblib.load(model_path)
-        else:
-            raise ValueError(f"Unsupported model format: {ext}")
+    #     logger.info("HF model loaded successfully")
 
-        logger.info("Anomaly model loaded successfully")
+    #     return _model
 
-    except Exception as exc:
-        logger.error("Failed to load HF model: {}", exc)
-        logger.warning("Falling back to default IsolationForest")
+    # except Exception as exc:
+    #     logger.error("HF model load failed: {}", exc)
 
-        # Create simple fallback model
-        fallback = IsolationForest(random_state=42)
-        dummy = np.zeros((10, 7))  # 7 features required
-        fallback.fit(dummy)
-        _model = fallback
+    # -------------------------------
+    # TRY 2: Load local model
+    # -------------------------------
+    print("Loading local model")
+    local_model = load_local_model()
+    if local_model is not None:
+        logger.info("Loaded local model successfully")
+        _model = local_model
+        return _model
+
+    # -------------------------------
+    # TRY 3: Emergency fallback
+    # -------------------------------
+    logger.warning("Using emergency fallback PyOD IForest model")
+
+    fallback = IForest(contamination=0.02, random_state=42)
+    dummy = np.zeros((20, 7))  # 7 features
+    fallback.fit(dummy)
+    _model = fallback
 
     return _model
 
 
+# --------------------------------
+# Feature Builder
+# --------------------------------
 def build_feature_vector(metrics: SessionMetrics) -> np.ndarray:
     return np.array(
         [
@@ -83,7 +113,8 @@ def build_feature_vector(metrics: SessionMetrics) -> np.ndarray:
 def score_session(metrics: SessionMetrics) -> dict[str, Any]:
     model = load_model()
     features = build_feature_vector(metrics)
-    score = -float(model.score_samples(features)[0])
+
+    score = float(model.decision_function(features)[0])
     is_anomalous = score >= settings.anomaly_score_threshold
 
     return {

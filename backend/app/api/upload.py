@@ -15,7 +15,10 @@ async def upload_file(
     current_user: dict = Depends(auth_service.get_current_user),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    print("uploading file")
     service = AnalyticsService(db)
+    print("service", service)
     result = await service.process_upload(str(current_user["_id"]), file)
+    print("result", result)
     return success(result.model_dump())
 
