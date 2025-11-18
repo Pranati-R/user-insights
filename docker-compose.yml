@@ -1,0 +1,38 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build: ./backend
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      HF_MODEL_REPO: ${HF_MODEL_REPO:-userinsight/isolation-forest-session}
+      HF_MODEL_FILENAME: ${HF_MODEL_FILENAME:-isolation_forest.skops}
+      HF_TOKEN: ${HF_TOKEN:-}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      ANOMALY_SCORE_THRESHOLD: ${ANOMALY_SCORE_THRESHOLD:-0.65}
+    depends_on:
+      - mongo
+    ports:
+      - '8000:8000'
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - '5173:80'
+
+volumes:
+  mongo-data:
+
+
