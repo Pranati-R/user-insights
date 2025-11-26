@@ -1,0 +1,16 @@
+timestamp|type|url|session|site|scroll|browser|device|action|element
+2024-11-25T10:00:00Z|pageview|/home|sess_001|example.com||Chrome|Desktop||
+2024-11-25T10:00:30Z|click|/home|sess_001|example.com||Chrome|Desktop||nav_products
+2024-11-25T10:01:00Z|pageview|/products|sess_001|example.com||Chrome|Desktop||
+2024-11-25T10:01:15Z|scroll|/products|sess_001|example.com|25.5|Chrome|Desktop||
+2024-11-25T10:01:30Z|scroll|/products|sess_001|example.com|50.0|Chrome|Desktop||
+2024-11-25T10:02:00Z|click|/products|sess_001|example.com||Chrome|Desktop|view_details|product_123
+2024-11-25T10:02:30Z|pageview|/product/123|sess_001|example.com||Chrome|Desktop||
+2024-11-25T10:02:45Z|scroll|/product/123|sess_001|example.com|75.0|Chrome|Desktop||
+2024-11-25T10:03:00Z|click|/product/123|sess_001|example.com||Chrome|Desktop|add_to_cart|add_to_cart
+2024-11-25T10:03:30Z|pageview|/cart|sess_001|example.com||Chrome|Desktop||
+2024-11-25T11:00:00Z|pageview|/home|sess_002|example.com||Firefox|Mobile||
+2024-11-25T11:00:15Z|click|/home|sess_002|example.com||Firefox|Mobile||nav_about
+2024-11-25T11:00:45Z|pageview|/about|sess_002|example.com||Firefox|Mobile||
+2024-11-25T11:01:00Z|scroll|/about|sess_002|example.com|30.0|Firefox|Mobile||
+2024-11-25T11:01:30Z|scroll|/about|sess_002|example.com|60.0|Firefox|Mobile||

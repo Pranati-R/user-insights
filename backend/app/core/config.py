@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     tracking_base_url: str = "http://localhost:8000"
     cors_origins: list[str] = ["https://vcode7.github.io","http://localhost:5173","http://localhost:5174","http://localhost:5175"]
+    
+    # Groq API for intelligent log parsing (optional)
+    groq_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 

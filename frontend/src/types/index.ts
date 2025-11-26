@@ -69,9 +69,25 @@ export interface AnomalyDetail {
   explanations?: Record<string, unknown>
 }
 
+export interface AnomalyBreakdown {
+  total_anomalies: number
+  anomaly_percentage: number
+  top_anomalies: SessionSummary[]
+  anomaly_reasons_summary: Record<string, number>
+}
+
+export interface ProcessingStats {
+  total_events_in_file: number
+  successfully_inserted: number
+  failed_events: number
+  success_rate: number
+}
+
 export interface UploadAnalyticsResponse {
   ingested_events: number
   summary: AnalyticsSummary
+  anomaly_breakdown?: AnomalyBreakdown
+  processing_stats?: ProcessingStats
 }
 
 

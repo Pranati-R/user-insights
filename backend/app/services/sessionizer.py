@@ -57,6 +57,24 @@ def build_session(session_id: ObjectId, user_id: str, events: list[dict[str, Any
     end_ts = max(event["timestamp"] for event in events)
     anomaly = score_session(metrics)
 
+    # Convert NumPy types to Python native types for MongoDB
+    def convert_numpy_types(obj):
+        """Recursively convert numpy types to Python native types"""
+        import numpy as np
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: convert_numpy_types(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy_types(item) for item in obj]
+        return obj
+
     return {
         "_id": session_id,
         "session_id": str(session_id),
@@ -64,9 +82,12 @@ def build_session(session_id: ObjectId, user_id: str, events: list[dict[str, Any
         "start_ts": start_ts,
         "end_ts": end_ts,
         "metrics": metrics.model_dump(),
-        "anomaly_score": anomaly["score"],
-        "is_anomalous": anomaly["is_anomalous"],
-        "feature_snapshot": anomaly["features"],
+        "anomaly_score": float(anomaly["score"]),
+        "raw_anomaly_score": float(anomaly.get("raw_score", 0)),
+        "is_anomalous": bool(anomaly["is_anomalous"]),
+        "anomaly_reasons": list(anomaly.get("anomaly_reasons", [])),
+        "feature_snapshot": convert_numpy_types(anomaly["features"]),
+        "feature_contributions": convert_numpy_types(anomaly.get("feature_contributions", {})),
         "event_ids": [event["_id"] for event in events if "_id" in event],
     }
 

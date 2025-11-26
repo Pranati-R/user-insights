@@ -1,0 +1,171 @@
+{
+  "events": [
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T10:00:00Z",
+      "page": "/home",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Chrome",
+        "device": "Desktop"
+      }
+    },
+    {
+      "event_type": "click",
+      "timestamp": "2024-11-25T10:00:30Z",
+      "page": "/home",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "element": "nav_products",
+        "x": 150,
+        "y": 200
+      }
+    },
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T10:01:00Z",
+      "page": "/products",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Chrome",
+        "device": "Desktop"
+      }
+    },
+    {
+      "event_type": "scroll",
+      "timestamp": "2024-11-25T10:01:15Z",
+      "page": "/products",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "scroll_depth": 25.5,
+      "metadata": {
+        "browser": "Chrome"
+      }
+    },
+    {
+      "event_type": "scroll",
+      "timestamp": "2024-11-25T10:01:30Z",
+      "page": "/products",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "scroll_depth": 50.0,
+      "metadata": {
+        "browser": "Chrome"
+      }
+    },
+    {
+      "event_type": "click",
+      "timestamp": "2024-11-25T10:02:00Z",
+      "page": "/products",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "element": "product_123",
+        "action": "view_details"
+      }
+    },
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T10:02:30Z",
+      "page": "/product/123",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Chrome",
+        "device": "Desktop"
+      }
+    },
+    {
+      "event_type": "scroll",
+      "timestamp": "2024-11-25T10:02:45Z",
+      "page": "/product/123",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "scroll_depth": 75.0,
+      "metadata": {
+        "browser": "Chrome"
+      }
+    },
+    {
+      "event_type": "click",
+      "timestamp": "2024-11-25T10:03:00Z",
+      "page": "/product/123",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "element": "add_to_cart",
+        "product_id": "123"
+      }
+    },
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T10:03:30Z",
+      "page": "/cart",
+      "session_id": "sess_001",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Chrome",
+        "device": "Desktop"
+      }
+    },
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T11:00:00Z",
+      "page": "/home",
+      "session_id": "sess_002",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Firefox",
+        "device": "Mobile"
+      }
+    },
+    {
+      "event_type": "click",
+      "timestamp": "2024-11-25T11:00:15Z",
+      "page": "/home",
+      "session_id": "sess_002",
+      "website": "example.com",
+      "metadata": {
+        "element": "nav_about",
+        "x": 100,
+        "y": 50
+      }
+    },
+    {
+      "event_type": "page_view",
+      "timestamp": "2024-11-25T11:00:45Z",
+      "page": "/about",
+      "session_id": "sess_002",
+      "website": "example.com",
+      "metadata": {
+        "browser": "Firefox",
+        "device": "Mobile"
+      }
+    },
+    {
+      "event_type": "scroll",
+      "timestamp": "2024-11-25T11:01:00Z",
+      "page": "/about",
+      "session_id": "sess_002",
+      "website": "example.com",
+      "scroll_depth": 30.0,
+      "metadata": {
+        "browser": "Firefox"
+      }
+    },
+    {
+      "event_type": "scroll",
+      "timestamp": "2024-11-25T11:01:30Z",
+      "page": "/about",
+      "session_id": "sess_002",
+      "website": "example.com",
+      "scroll_depth": 60.0,
+      "metadata": {
+        "browser": "Firefox"
+      }
+    }
+  ]
+}

@@ -13,8 +13,10 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.config import get_settings
 from app.schemas.analytics import AnalyticsSummary, SessionMetrics, SessionSummary
 from app.schemas.events import EventIn, EventPayload
-from app.schemas.upload import UploadAnalyticsResponse
+from app.schemas.upload import UploadAnalyticsResponse, AnomalyBreakdown
 from app.services.sessionizer import rebuild_sessions_for_user
+from app.services.intelligent_parser import IntelligentLogParser
+from collections import Counter
 
 settings = get_settings()
 
@@ -119,71 +121,127 @@ class AnalyticsService:
         contents = await file.read()
         if not contents:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-        print("contents")
-        events = self._parse_file(contents, file.filename or "")
-        inserted = 0
-       
-        for raw_event in events:
-          
-            raw_type = raw_event.get("event_type")
-            if is_nan(raw_type) or raw_type in (None, ""):
-                raw_type = raw_event.get("type")
-            if raw_type:
-                raw_type = str(raw_type).strip().lower()
-            else:
-                raw_type = None
-
-            # If still missing, infer automatically
-            if raw_type is None:
-                if raw_event.get("scroll_depth") not in (None, float("nan")):
-                    raw_type = "scroll"
-                elif raw_event.get("action"):
-                    raw_type = "action"
-                elif raw_event.get("page"):
-                    raw_type = "page_view"
-                else:
-                    raw_type = "action"
-            raw_metadata = raw_event.get("metadata")
-            if raw_metadata is None or isinstance(raw_metadata, float):
-                raw_metadata = {}
-                    
-            payload = EventPayload(
-                session_id=raw_event.get("session_id"),
-                event_type=raw_type,
-                page=raw_event.get("page"),
-                metadata=raw_metadata,
-                scroll_depth=raw_event.get("scroll_depth"),
-                website=raw_event.get("website"),
-                timestamp=self._parse_timestamp(raw_event.get("timestamp")),
+        
+        # Use intelligent parser to handle multiple formats
+        parser = IntelligentLogParser()
+        raw_events = parser.parse_file(contents, file.filename or "")
+        
+        if not raw_events:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No valid events found in file"
             )
-            print(payload)
-            await self.record_event(EventIn(user_id=user_id, **payload.model_dump()))
-            inserted += 1
+        
+        inserted = 0
+        failed = 0
+        
+        for raw_event in raw_events:
+            try:
+                # Use intelligent normalization
+                normalized = parser.normalize_log_entry(raw_event)
+                
+                # Extract and validate required fields
+                event_type = normalized.get("event_type")
+                if not event_type:
+                    # Infer from other fields
+                    if normalized.get("scroll_depth") is not None:
+                        event_type = "scroll"
+                    elif normalized.get("page"):
+                        event_type = "page_view"
+                    else:
+                        event_type = "action"
+                
+                timestamp = normalized.get("timestamp")
+                if not timestamp:
+                    # Use current time as fallback
+                    timestamp = datetime.utcnow()
+                
+                # Build event payload
+                payload = EventPayload(
+                    session_id=normalized.get("session_id"),
+                    event_type=event_type,
+                    page=normalized.get("page"),
+                    metadata=normalized.get("metadata", {}),
+                    scroll_depth=normalized.get("scroll_depth"),
+                    website=normalized.get("website"),
+                    timestamp=timestamp,
+                )
+                
+                await self.record_event(EventIn(user_id=user_id, **payload.model_dump()))
+                inserted += 1
+                
+            except Exception as e:
+                failed += 1
+                print(f"Failed to process event: {e}")
+                continue
+
+        if inserted == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to process any events. {failed} events had errors."
+            )
 
         await rebuild_sessions_for_user(self.db, user_id)
         summary = await self.summary(user_id)
+        
+        # Get anomaly breakdown
+        anomaly_breakdown = await self._get_anomaly_breakdown(user_id)
+        
+        # Processing stats
+        processing_stats = {
+            "total_events_in_file": len(raw_events),
+            "successfully_inserted": inserted,
+            "failed_events": failed,
+            "success_rate": (inserted / len(raw_events)) * 100 if raw_events else 0,
+        }
 
-        return UploadAnalyticsResponse(ingested_events=inserted, summary=summary)
+        return UploadAnalyticsResponse(
+            ingested_events=inserted,
+            summary=summary,
+            anomaly_breakdown=anomaly_breakdown,
+            processing_stats=processing_stats
+        )
+    
+    async def _get_anomaly_breakdown(self, user_id: str) -> AnomalyBreakdown:
+        """Get detailed anomaly breakdown for uploaded data"""
+        # Get all anomalous sessions
+        anomalous_sessions = await self.sessions.find(
+            {"user_id": user_id, "is_anomalous": True}
+        ).sort("anomaly_score", -1).to_list(length=None)
+        
+        total_sessions = await self.sessions.count_documents({"user_id": user_id})
+        total_anomalies = len(anomalous_sessions)
+        anomaly_percentage = (total_anomalies / total_sessions * 100) if total_sessions > 0 else 0
+        
+        # Collect all anomaly reasons
+        all_reasons = []
+        for session in anomalous_sessions:
+            reasons = session.get("anomaly_reasons", [])
+            all_reasons.extend(reasons)
+        
+        # Count reason occurrences
+        reason_counts = dict(Counter(all_reasons))
+        
+        # Get top 5 anomalies
+        top_anomalies = []
+        for doc in anomalous_sessions[:5]:
+            top_anomalies.append(
+                SessionSummary(
+                    session_id=doc["session_id"],
+                    user_id=doc["user_id"],
+                    start_ts=doc["start_ts"],
+                    end_ts=doc["end_ts"],
+                    metrics=SessionMetrics(**doc["metrics"]),
+                    anomaly_score=doc.get("anomaly_score"),
+                    is_anomalous=doc.get("is_anomalous"),
+                )
+            )
+        
+        return AnomalyBreakdown(
+            total_anomalies=total_anomalies,
+            anomaly_percentage=anomaly_percentage,
+            top_anomalies=top_anomalies,
+            anomaly_reasons_summary=reason_counts
+        )
 
-    @staticmethod
-    def _parse_timestamp(value: Any) -> datetime:
-        if isinstance(value, datetime):
-            return value
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-
-    @staticmethod
-    def _parse_file(contents: bytes, filename: str) -> list[dict[str, Any]]:
-        if filename.lower().endswith(".json"):
-            data = json.loads(contents.decode("utf-8"))
-            if isinstance(data, dict):
-                data = data.get("events", [])
-            if not isinstance(data, list):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON structure")
-            return data
-
-        if filename.lower().endswith(".csv"):
-            df = pd.read_csv(StringIO(contents.decode("utf-8")))
-            return df.to_dict(orient="records")
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
 
