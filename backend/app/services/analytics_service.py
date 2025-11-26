@@ -17,7 +17,7 @@ from app.schemas.upload import UploadAnalyticsResponse, AnomalyBreakdown
 from app.services.sessionizer import rebuild_sessions_for_user
 from app.services.intelligent_parser import IntelligentLogParser
 from collections import Counter
-
+from app.services.sessionizer import group_events_into_sessions
 settings = get_settings()
 
 def is_nan(v):
@@ -117,46 +117,123 @@ class AnalyticsService:
             for doc in docs
         ]
 
+    # async def process_upload(self, user_id: str, file: UploadFile) -> UploadAnalyticsResponse:
+    #     contents = await file.read()
+    #     if not contents:
+    #         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+        
+    #     # Use intelligent parser to handle multiple formats
+    #     parser = IntelligentLogParser()
+    #     raw_events = parser.parse_file(contents, file.filename or "")
+        
+    #     if not raw_events:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_400_BAD_REQUEST,
+    #             detail="No valid events found in file"
+    #         )
+        
+    #     inserted = 0
+    #     failed = 0
+        
+    #     for raw_event in raw_events:
+    #         try:
+    #             # Use intelligent normalization
+    #             normalized = parser.normalize_log_entry(raw_event)
+                
+    #             # Extract and validate required fields
+    #             event_type = normalized.get("event_type")
+    #             if not event_type:
+    #                 # Infer from other fields
+    #                 if normalized.get("scroll_depth") is not None:
+    #                     event_type = "scroll"
+    #                 elif normalized.get("page"):
+    #                     event_type = "page_view"
+    #                 else:
+    #                     event_type = "action"
+                
+    #             timestamp = normalized.get("timestamp")
+    #             if not timestamp:
+    #                 # Use current time as fallback
+    #                 timestamp = datetime.utcnow()
+                
+    #             # Build event payload
+    #             payload = EventPayload(
+    #                 session_id=normalized.get("session_id"),
+    #                 event_type=event_type,
+    #                 page=normalized.get("page"),
+    #                 metadata=normalized.get("metadata", {}),
+    #                 scroll_depth=normalized.get("scroll_depth"),
+    #                 website=normalized.get("website"),
+    #                 timestamp=timestamp,
+    #             )
+                
+    #             # Temporarily store events instead of recording permanently
+    #             await self.record_event(EventIn(user_id=user_id, **payload.model_dump()))
+    #             inserted += 1
+                
+    #         except Exception as e:
+    #             failed += 1
+    #             print(f"Failed to process event: {e}")
+    #             continue
+
+    #     if inserted == 0:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_400_BAD_REQUEST,
+    #             detail=f"Failed to process any events. {failed} events had errors."
+    #         )
+
+    #     await rebuild_sessions_for_user(self.db, user_id)
+    #     summary = await self.summary(user_id)
+        
+    #     # Get anomaly breakdown
+    #     anomaly_breakdown = await self._get_anomaly_breakdown(user_id)
+        
+    #     # Processing stats
+    #     processing_stats = {
+    #         "total_events_in_file": len(raw_events),
+    #         "successfully_inserted": inserted,
+    #         "failed_events": failed,
+    #         "success_rate": (inserted / len(raw_events)) * 100 if raw_events else 0,
+    #     }
+
+    #     return UploadAnalyticsResponse(
+    #         ingested_events=inserted,
+    #         summary=summary,
+    #         anomaly_breakdown=anomaly_breakdown,
+    #         processing_stats=processing_stats
+    #     )
     async def process_upload(self, user_id: str, file: UploadFile) -> UploadAnalyticsResponse:
         contents = await file.read()
         if not contents:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-        
-        # Use intelligent parser to handle multiple formats
+            raise HTTPException(status_code=400, detail="Empty file")
+
         parser = IntelligentLogParser()
         raw_events = parser.parse_file(contents, file.filename or "")
-        
+
         if not raw_events:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No valid events found in file"
-            )
-        
-        inserted = 0
+            raise HTTPException(status_code=400, detail="No valid events found")
+
+        parsed_events = []
         failed = 0
-        
-        for raw_event in raw_events:
+
+        for raw in raw_events:
             try:
-                # Use intelligent normalization
-                normalized = parser.normalize_log_entry(raw_event)
-                
-                # Extract and validate required fields
+                normalized = parser.normalize_log_entry(raw)
+
+                # -------------------------------------------------------------------
+                # DETERMINE event_type intelligently
+                # -------------------------------------------------------------------
                 event_type = normalized.get("event_type")
                 if not event_type:
-                    # Infer from other fields
                     if normalized.get("scroll_depth") is not None:
                         event_type = "scroll"
                     elif normalized.get("page"):
                         event_type = "page_view"
                     else:
                         event_type = "action"
-                
-                timestamp = normalized.get("timestamp")
-                if not timestamp:
-                    # Use current time as fallback
-                    timestamp = datetime.utcnow()
-                
-                # Build event payload
+
+                timestamp = normalized.get("timestamp") or datetime.utcnow()
+
                 payload = EventPayload(
                     session_id=normalized.get("session_id"),
                     event_type=event_type,
@@ -166,42 +243,101 @@ class AnalyticsService:
                     website=normalized.get("website"),
                     timestamp=timestamp,
                 )
-                
-                await self.record_event(EventIn(user_id=user_id, **payload.model_dump()))
-                inserted += 1
-                
+
+                # -------------------------------------------------------------------
+                # ❗ DO NOT INSERT INTO DB — USE IN MEMORY
+                # -------------------------------------------------------------------
+                evt = payload.model_dump()
+                evt["user_id"] = user_id
+                parsed_events.append(evt)
+
             except Exception as e:
                 failed += 1
-                print(f"Failed to process event: {e}")
+                print("Failed event:", raw, "\nError:", e)
                 continue
 
-        if inserted == 0:
+        if not parsed_events:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to process any events. {failed} events had errors."
+                status_code=400,
+                detail=f"Failed to process any events. ({failed} events invalid)"
             )
 
-        await rebuild_sessions_for_user(self.db, user_id)
-        summary = await self.summary(user_id)
-        
-        # Get anomaly breakdown
-        anomaly_breakdown = await self._get_anomaly_breakdown(user_id)
-        
-        # Processing stats
+        # -------------------------------------------------------------------
+        # 👇 MEMORY-ONLY SESSIONIZER (NO DATABASE)
+        # -------------------------------------------------------------------
+        sessions = group_events_into_sessions(parsed_events)
+
+        # -------------------------------------------------------------------
+        # BUILD ANOMALY BREAKDOWN
+        # -------------------------------------------------------------------
+        total_sessions = len(sessions)
+        anomalies = [s for s in sessions if s["is_anomalous"]]
+        anomaly_percentage = (len(anomalies) / total_sessions * 100) if total_sessions else 0
+
+        reason_counts = Counter(
+            reason
+            for sess in anomalies
+            for reason in sess.get("anomaly_reasons", [])
+        )
+
+        top_anomalies = anomalies[:5]
+
+        anomaly_breakdown = AnomalyBreakdown(
+            total_anomalies=len(anomalies),
+            anomaly_percentage=anomaly_percentage,
+            top_anomalies=[
+                SessionSummary(
+                    session_id=s["session_id"],
+                    user_id=s["user_id"],
+                    start_ts=s["start_ts"],
+                    end_ts=s["end_ts"],
+                    metrics=SessionMetrics(**s["metrics"]),
+                    anomaly_score=s["anomaly_score"],
+                    is_anomalous=s["is_anomalous"],
+                )
+                for s in top_anomalies
+            ],
+            anomaly_reasons_summary=dict(reason_counts),
+        )
+
+        # -------------------------------------------------------------------
+        # BUILD PROCESSING STATS
+        # -------------------------------------------------------------------
         processing_stats = {
             "total_events_in_file": len(raw_events),
-            "successfully_inserted": inserted,
+            "successfully_parsed": len(parsed_events),
             "failed_events": failed,
-            "success_rate": (inserted / len(raw_events)) * 100 if raw_events else 0,
+            "success_rate": (len(parsed_events) / len(raw_events) * 100),
+            "sessions_detected": total_sessions,
         }
 
+        summary = AnalyticsSummary(
+            total_events=len(parsed_events),
+            total_sessions=total_sessions,
+            anomaly_rate=anomaly_percentage,
+            last_event_at=max(e["timestamp"] for e in parsed_events),
+            top_pages=[],
+        )
+
         return UploadAnalyticsResponse(
-            ingested_events=inserted,
+            ingested_events=len(parsed_events),
             summary=summary,
             anomaly_breakdown=anomaly_breakdown,
-            processing_stats=processing_stats
+            processing_stats=processing_stats,
+            sessions=[
+                SessionSummary(
+                    session_id=s["session_id"],
+                    user_id=s["user_id"],
+                    start_ts=s["start_ts"],
+                    end_ts=s["end_ts"],
+                    metrics=SessionMetrics(**s["metrics"]),
+                    anomaly_score=s["anomaly_score"],
+                    is_anomalous=s["is_anomalous"],
+                )
+                for s in sessions
+            ]
         )
-    
+
     async def _get_anomaly_breakdown(self, user_id: str) -> AnomalyBreakdown:
         """Get detailed anomaly breakdown for uploaded data"""
         # Get all anomalous sessions
@@ -243,5 +379,3 @@ class AnalyticsService:
             top_anomalies=top_anomalies,
             anomaly_reasons_summary=reason_counts
         )
-
-

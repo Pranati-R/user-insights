@@ -117,7 +117,7 @@ const FileUploadPage = () => {
                   <p className="text-sm text-slate-600 dark:text-slate-400">Successfully Processed</p>
                 </div>
                 <p className="text-3xl font-semibold text-slate-900 dark:text-white">
-                  {mutation.data.processing_stats.successfully_inserted.toLocaleString()}
+                  {mutation.data.processing_stats.successfully_parsed.toLocaleString()}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   {mutation.data.processing_stats.success_rate.toFixed(1)}% success rate
@@ -158,11 +158,65 @@ const FileUploadPage = () => {
           {mutation.data.anomaly_breakdown && (
             <AnomalyBreakdownCard breakdown={mutation.data.anomaly_breakdown} />
           )}
+{/* Session Score Table */}
+          {mutation.data.sessions && (
+            <SessionScoresTable sessions={mutation.data.sessions} />
+          )}
 
           {/* Summary Cards */}
           <SummaryCards summary={mutation.data.summary} />
         </div>
       )}
+    </div>
+  )
+}
+
+const SessionScoresTable = ({ sessions }: { sessions: any[] }) => {
+  if (!sessions || sessions.length === 0) return null
+
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-6 shadow-sm">
+      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        Session Scores
+      </h3>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left border-collapse">
+          <thead>
+            <tr className="border-b border-slate-200 dark:border-slate-700">
+              <th className="py-2 px-3">Session ID</th>
+              <th className="py-2 px-3">Start</th>
+              <th className="py-2 px-3">End</th>
+              <th className="py-2 px-3">Score</th>
+              <th className="py-2 px-3">Anomaly</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((s) => (
+              <tr
+                key={s.session_id}
+                className={`border-b border-slate-200 dark:border-slate-800 ${
+                  s.is_anomalous ? 'bg-rose-500/10' : ''
+                }`}
+              >
+                <td className="py-2 px-3 font-mono text-xs">{s.session_id}</td>
+                <td className="py-2 px-3">{new Date(s.start_ts).toLocaleString()}</td>
+                <td className="py-2 px-3">{new Date(s.end_ts).toLocaleString()}</td>
+                <td className="py-2 px-3 font-semibold">
+                  {(s.anomaly_score * 100).toFixed(2)}%
+                </td>
+                <td className="py-2 px-3">
+                  {s.is_anomalous ? (
+                    <span className="text-rose-500 font-semibold">Yes</span>
+                  ) : (
+                    <span className="text-green-500 font-semibold">No</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -63,11 +63,7 @@ const SessionDetail = ({ session }: Props) => {
             ) : (
               <span className="text-emerald-300">considered normal</span>
             )}
-            {Array.isArray(anomaly.explanations?.feature_vector) && (
-              <div className="mt-3 text-xs text-slate-400">
-                Feature vector: {anomaly.explanations.feature_vector.join(', ')}
-              </div>
-            )}
+         
           </div>
         ) : (
           <div className="mt-2 text-sm text-slate-400">No anomaly data available.</div>

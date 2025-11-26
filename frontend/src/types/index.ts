@@ -78,7 +78,7 @@ export interface AnomalyBreakdown {
 
 export interface ProcessingStats {
   total_events_in_file: number
-  successfully_inserted: number
+  successfully_parsed: number
   failed_events: number
   success_rate: number
 }
@@ -88,6 +88,7 @@ export interface UploadAnalyticsResponse {
   summary: AnalyticsSummary
   anomaly_breakdown?: AnomalyBreakdown
   processing_stats?: ProcessingStats
+  sessions: SessionSummary[]
 }
 
 

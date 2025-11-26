@@ -72,7 +72,7 @@ def main():
 
     print("\nSaving model → models/local_iforest.pkl")
     Path("models").mkdir(exist_ok=True)
-    joblib.dump(model, "../app/models/local_iforest.pkl")
+    joblib.dump(model, "models/local_iforest.pkl")
 
     print("Done!")
 

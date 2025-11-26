@@ -23,7 +23,7 @@ _model: IForest | None = None
 _scaler: StandardScaler | None = None
 _ensemble_models: dict[str, Any] | None = None
 
-LOCAL_MODEL_PATH = Path("app/models/local_iforest.pkl")   # <-- LOCAL MODEL
+LOCAL_MODEL_PATH = Path(r"E:\projects\useranalytics\backend\local_iforest.pkl")   # <-- LOCAL MODEL
 
 
 def load_local_model() -> IForest | None:
@@ -162,11 +162,20 @@ def score_session(metrics: SessionMetrics) -> dict[str, Any]:
     
     # Normalize score to 0-1 range for better interpretation
     # Higher score = more anomalous
-    normalized_score = 1 / (1 + np.exp(-score))  # Sigmoid transformation
-    
+    raw_score = float(model.decision_function(features)[0])
+
+    # Higher score = MORE anomalous in PyOD, we scale to 0–100 for UX
+    normalized_score = (raw_score - (-1)) / (1 - (-1))  # map -5..5 → 0..1 range
+    normalized_score = max(0.0, min(1.0, normalized_score))
+
+    # Define your threshold (example: 0.6)
+    print(normalized_score)
     is_anomalous = normalized_score >= settings.anomaly_score_threshold
 
-    # Feature importance for explainability
+    print("Threshold =", settings.anomaly_score_threshold)
+    print("Normalized Score =", normalized_score)
+
+        # Feature importance for explainability
     feature_names = [
         "duration_seconds",
         "event_count",

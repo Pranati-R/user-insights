@@ -17,4 +17,4 @@ class UploadAnalyticsResponse(BaseModel):
     summary: AnalyticsSummary
     anomaly_breakdown: AnomalyBreakdown | None = None
     processing_stats: dict[str, Any] | None = None
-
+    sessions: list[SessionSummary] 

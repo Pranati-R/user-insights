@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     hf_model_filename: str = "isolation_forest.pkl"
     hf_token: str | None = None
 
-    anomaly_score_threshold: float = 0.65
+    anomaly_score_threshold: float = 0.5
     session_idle_minutes: int = 30
 
     jwt_secret: str = "super-secret-key"
